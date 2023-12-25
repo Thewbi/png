@@ -29,15 +29,19 @@ bool read_chunk(std::ifstream &ifstream, Chunk& chunk, bool read_data)
     // store the location to the chunk data into the chunk
     chunk.data_offset = ifstream.tellg();
 
-    constexpr uint32_t DATA_BUFFER_LENGTH = 65536;
+    constexpr uint32_t DATA_BUFFER_LENGTH = 65536 * 100;
     assert(chunk.length <= DATA_BUFFER_LENGTH);
 
     // read data for CRC calculation
-    uint8_t data[DATA_BUFFER_LENGTH];
+    //uint8_t data[DATA_BUFFER_LENGTH];
+    uint8_t* data = new uint8_t[chunk.length];
     ifstream.read(reinterpret_cast<char*>(data), chunk.length);
     crc = update_crc(crc, data, chunk.length);
     crc = crc ^ 0xffffffffL;
     endswap(&crc);
+
+    delete[] data;
+    data = nullptr;
 
     // read chunk CRC from the file
     ifstream.read(reinterpret_cast<char*>(&chunk.crc), sizeof(uint32_t));

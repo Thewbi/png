@@ -93,6 +93,7 @@ void test_compress(Byte *compr, uLong comprLen, Byte *uncompr,
 // CTRL + ALT + n -- Run the code
 int main()
 {
+    /*
     Byte *uncompr;
     uLong uncomprLen = 20000;
 
@@ -106,17 +107,24 @@ int main()
 
     free(compr);
     free(uncompr);
+    */
 
     // std::cout << "PNG" << std::endl;
 
-    //std::string inFileName{"test_images\\zelda_alttp_overworld.png"}; // colour-type: indexed_color
+    // colour-type: indexed_color
+    std::string inFileName{"test_images\\zelda_alttp_overworld.png"};
+    
+    // has filter instructions!
+    // colour-type: true color
+    //std::string inFileName{"test_images\\DphjT.png"}; 
+
+    // most simple case: true color, no filter instructions!
     //std::string inFileName{"test_images\\28736.png"};
     //std::string inFileName{"test_images\\28894.png"};
-    //std::string inFileName{"test_images\\DphjT.png"};
-    std::string inFileName{"test_images\\triforce_chamber.png"};
+    //std::string inFileName{"test_images\\triforce_chamber.png"};
     //std::string inFileName{"test_images\\small_2x3.png"};
 
-    std::cout << "Loading file " << std::quoted(inFileName) << std::endl;
+    std::cout << "Loading file: " << std::quoted(inFileName) << std::endl;
 
     std::ifstream inFile{inFileName, std::ios::binary};
     if (!inFile)
@@ -144,7 +152,6 @@ int main()
         Chunk chunk;
 
         bool read_data = false;
-        //read_chunk(inFile, chunk, read_data);
         if (!read_chunk(inFile, chunk, read_data))
         {
             std::cerr << "File " << std::quoted(inFileName) << " could not load chunk!" << std::endl;
@@ -227,9 +234,12 @@ int main()
 
 
 
-            int height = image_height;
-            int width = image_width;
-            unsigned char image[height][width][BYTES_PER_PIXEL];
+            uint32_t height = image_height;
+            uint32_t width = image_width;
+            //unsigned char image[height][width][BYTES_PER_PIXEL];
+
+            uint8_t* image = new uint8_t[height * width * BYTES_PER_PIXEL];
+            
             char* imageFileName = (char*) "test_images\\bitmapImage.bmp";
 
             // // dummy data
@@ -249,23 +259,32 @@ int main()
 
 
             // push file pointer
-            int current_file_position = inFile.tellg();
+            std::streampos current_file_position = inFile.tellg();
 
             std::cout << "Image Data" << std::endl;
 
             // seek to chunk data
             inFile.seekg(chunk.data_offset);
 
-/**/
+            Byte *uncompr = nullptr;
+            Byte *compr = nullptr;
+/* */
             // unzip
-            Byte *uncompr;
-            uLong uncomprLen = 65536*100;
-
-            Byte *compr;
+            
             uLong comprLen = chunk.length;
+            uLong uncomprLen = 65536 * 1000;
 
             compr    = (Byte*) calloc((uInt)comprLen, 1);
             uncompr  = (Byte*) calloc((uInt)uncomprLen, 1);
+
+            inFile.read(reinterpret_cast<char *>(compr), comprLen);
+
+            int err = uncompress(uncompr, &uncomprLen, compr, comprLen);
+            CHECK_ERR(err, "uncompress");
+
+            printf("UNCOMPRESSED\n");
+
+
 
             //test_compress(compr, comprLen, uncompr, uncomprLen);
 
@@ -276,7 +295,7 @@ int main()
             //     compr[i] = data_byte & 0xff;
             // }
 
-            inFile.read(reinterpret_cast<char *>(compr), comprLen);
+            
 
             // // DEBUG output the data bytes
             // printf("COMPRESSED\n");
@@ -288,10 +307,10 @@ int main()
             // }
             // printf("\n");
 
-            int err = uncompress(uncompr, &uncomprLen, compr, comprLen);
-            CHECK_ERR(err, "uncompress");
+            //int err = uncompress(uncompr, &uncomprLen, compr, comprLen);
+            ///CHECK_ERR(err, "uncompress");
 
-            printf("UNCOMPRESSED\n");
+            //printf("UNCOMPRESSED\n");
 
             
 /*
@@ -351,6 +370,10 @@ int main()
             }
 */
 
+
+
+
+/*
             //
             // convert image data to bitmap
             //
@@ -377,16 +400,59 @@ int main()
 
             generateBitmapImage((unsigned char*) image, height, width, imageFileName);
             printf("Image generated!!\n");
+*/
 
-            // // dec
+
+
+            //
+            // convert image data to bitmap
+            //
+
+            int idx = 1;
+            int i, j;
+            for (i = 0; i < height; i++) {
+                
+                for (j = 0; j < width; j++) {
+
+                    // idx is just the current pixel in the png stream but in addition,
+                    // the one byte filter instruction has to be added per line of the png image data!
+                    // therefore the term (i+1) is added
+                    idx = (i * width + j) * 3 + (i+1);
+                    
+                    // height is inverted because png images are stored top-down for some reason
+                    image[ (height-1-i) * width * 3 + j * 3 + 2 ] = (unsigned char) (unsigned char) uncompr[idx + 0]; // red
+                    image[ (height-1-i) * width * 3 + j * 3 + 1 ] = (unsigned char) (unsigned char) uncompr[idx + 1]; // green
+                    image[ (height-1-i) * width * 3 + j * 3 + 0 ] = (unsigned char) (unsigned char) uncompr[idx + 2]; // blue
+                    
+                    idx = idx + 3;
+                }
+            }
+
+
+
+            generateBitmapImage((unsigned char*) image, height, width, imageFileName);
+            printf("Image generated!!\n");
+
+            if (image != nullptr) {
+                delete[] image;
+                image = nullptr;
+            }
+
+            // // decimal
             // for (uint8_t i = 0; i < uncomprLen; i++)
             // {
             //     printf("%d ", uncompr[i]);
             // }
             // printf("\n");
 
-            free(compr);
-            free(uncompr);
+            if (compr != nullptr) {
+                free(compr);
+                compr = nullptr;
+            }
+            if (uncompr != nullptr) {
+                free(uncompr);
+                uncompr = nullptr;
+            }
 
 
             // pop file pointer
