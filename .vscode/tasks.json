@@ -1,0 +1,12 @@
+{
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "run the makefile",
+            "command": "C:\\cygwin64\\bin\\make.exe",
+            "args": ["main"],
+            "problemMatcher": [],
+        }
+    ],
+    "version": "2.0.0"
+}

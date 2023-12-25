@@ -10,9 +10,11 @@
 
 class Chunk {
   public:
-    uint32_t length;
-    unsigned char type[4];
-    unsigned long crc;
+    uint32_t length; // 4 byte
+    unsigned char type[4]; // 4 byte
+    uint32_t crc; // 4 byte
+
+    // file pointer value to point to the start of data
     uint32_t data_offset;
 };
 
