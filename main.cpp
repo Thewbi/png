@@ -3,6 +3,8 @@
 #include <fstream>
 #include <string>
 #include <cstring>
+#include <vector>
+#include <iterator>
 
 #include "chunk.hpp"
 #include "zlib.h"
@@ -14,7 +16,12 @@
 
 #include <stdio.h>
 
-const int BYTES_PER_PIXEL = 3; /// red, green, & blue
+//
+// BMP file format header
+//
+
+const int BYTES_PER_PIXEL = 3; // red, green, & blue (3 byte => 8 bit per color)
+//const int BYTES_PER_PIXEL = 6; // red, green, & blue (6 byte => 16 bit per color)
 const int FILE_HEADER_SIZE = 14;
 const int INFO_HEADER_SIZE = 40;
 
@@ -23,7 +30,13 @@ unsigned char* createBitmapFileHeader(int height, int stride);
 unsigned char* createBitmapInfoHeader(int height, int width);
 
 
+static unsigned int png_paeth_predictor ( unsigned int a, unsigned int b,
+                                           unsigned int c );
 
+static unsigned int png_unfilter_paeth ( unsigned int current,
+                                          unsigned int left,
+                                          unsigned int above,
+                                          unsigned int above_left );
 
 
 /**
@@ -89,6 +102,62 @@ void test_compress(Byte *compr, uLong comprLen, Byte *uncompr,
     }
 }
 
+// https://stackoverflow.com/questions/30079658/uncompress-error-when-using-zlib
+int inf(const char *src, int srcLen, const char *dst, int dstLen) {
+    z_stream strm;
+    strm.zalloc=NULL;
+    strm.zfree=NULL;
+    strm.opaque=NULL;
+
+    strm.avail_in = srcLen;
+    strm.avail_out = dstLen;
+    strm.next_in = (Bytef *)src;
+    strm.next_out = (Bytef *)dst;
+
+    int err=-1, ret=-1;
+    err = inflateInit2(&strm, MAX_WBITS+16);
+    if (err == Z_OK){
+        err = inflate(&strm, Z_FINISH);
+        if (err == Z_STREAM_END){
+            ret = strm.total_out;
+        }
+        else{
+            inflateEnd(&strm);
+            return err;
+        }
+    }
+    else{
+        inflateEnd(&strm);
+        return err;
+    }
+    inflateEnd(&strm);
+    printf("%s\n", dst);
+    return err;
+}
+
+void process(std::vector<char>& old_data, std::vector<char>& new_data) 
+{
+    printf("process()\n");
+    old_data.insert(std::end(old_data), std::begin(new_data), std::end(new_data));
+}
+
+void readFile(std::ifstream& fstream, std::vector<char>& old_data, size_t size, std::function<void(std::vector<char>& old_data, std::vector<char>& new_data)> proc)
+{
+    printf("readFile size: %d \n", size);
+
+    //std::ifstream f( fileName );
+    std::vector<char> temp_vector(size);
+
+    fstream.read(temp_vector.data(), temp_vector.size());
+    proc(old_data, temp_vector);
+
+    // while( fstream.read( temp_vector.data(), temp_vector.size() ) ) {
+    //     temp_vector.resize( fstream.gcount() );
+    //     proc( old_data, temp_vector );
+    //     temp_vector.resize( size );
+    // }
+}
+
 //
 // CTRL + ALT + n -- Run the code
 int main()
@@ -111,18 +180,38 @@ int main()
 
     // std::cout << "PNG" << std::endl;
 
-    // colour-type: indexed_color
-    std::string inFileName{"test_images\\zelda_alttp_overworld.png"};
-    
-    // has filter instructions!
-    // colour-type: true color
-    //std::string inFileName{"test_images\\DphjT.png"}; 
+    // http://www.schaik.com/pngsuite/
 
+    // colour-type: 0 grayscale
+    //std::string inFileName{"test_images\\Grayscale_8bits_palette_sample_image.png"};
+    //std::string inFileName{"test_images\\plain_palette.png"}; // has two IDAT chunks !!!
+    
+    // colour-type: 2 true color
+    // has filter instructions!
+    //std::string inFileName{"test_images\\DphjT.png"};
+
+    // true color
+    // compression method: deflate
+    // https://stackoverflow.com/questions/39019568/png-truecolor-8-bit-depth-how-to-read-idat-chunk
+    //std::string inFileName{"test_images\\qOvp8.png"};
+    //std::string inFileName{"test_images\\Download_Several_IDAT_Chunks.png"};
+    //std::string inFileName{"test_images\\oi9n2c16.png"};
+
+    // colour-type: 2 true color (without alpha)
     // most simple case: true color, no filter instructions!
-    //std::string inFileName{"test_images\\28736.png"};
+    std::string inFileName{"test_images\\28736.png"};
     //std::string inFileName{"test_images\\28894.png"};
     //std::string inFileName{"test_images\\triforce_chamber.png"};
     //std::string inFileName{"test_images\\small_2x3.png"};
+    //std::string inFileName{"test_images\\RGB_16bits_palette_sample_image.png"};
+    //std::string inFileName{"test_images\\tiger-ny-png-safe-palette.png"};
+
+    // colour-type: 3 indexed_color
+    //std::string inFileName{"test_images\\zelda_alttp_overworld.png"};
+
+    // colour-type: 4 gray image with alpha channel
+
+    // colour-type: 6 true color with alpha channel
 
     std::cout << "Loading file: " << std::quoted(inFileName) << std::endl;
 
@@ -146,6 +235,8 @@ int main()
 
     uint32_t image_width;
     uint32_t image_height;
+
+    std::vector<char> image_data;
 
     while (inFile.peek() != EOF)
     {
@@ -171,7 +262,6 @@ int main()
 
             inFile.read(reinterpret_cast<char *>(&image_width), sizeof(uint32_t));
             endswap(&image_width);
-
             
             inFile.read(reinterpret_cast<char *>(&image_height), sizeof(uint32_t));
             endswap(&image_height);
@@ -231,32 +321,7 @@ int main()
         }
         else if (strncmp(reinterpret_cast<const char *>(chunk.type), "IDAT", 4) == 0)
         {
-
-
-
-            uint32_t height = image_height;
-            uint32_t width = image_width;
-            //unsigned char image[height][width][BYTES_PER_PIXEL];
-
-            uint8_t* image = new uint8_t[height * width * BYTES_PER_PIXEL];
-            
-            char* imageFileName = (char*) "test_images\\bitmapImage.bmp";
-
-            // // dummy data
-            // int i, j;
-            // for (i = 0; i < height; i++) {
-            //     for (j = 0; j < width; j++) {
-            //         image[i][j][2] = (unsigned char) ( i * 255 / height );             ///red
-            //         image[i][j][1] = (unsigned char) ( j * 255 / width );              ///green
-            //         image[i][j][0] = (unsigned char) ( (i+j) * 255 / (height+width) ); ///blue
-            //     }
-            // }
-
-            // generateBitmapImage((unsigned char*) image, height, width, imageFileName);
-            // printf("Image generated!!");
-
-
-
+           
 
             // push file pointer
             std::streampos current_file_position = inFile.tellg();
@@ -266,9 +331,31 @@ int main()
             // seek to chunk data
             inFile.seekg(chunk.data_offset);
 
+
+
+
+
+
+            
+
+            //image_data.reserve(chunk.length);
+
+            readFile(inFile, image_data, chunk.length, process);
+
+            // for (uint8_t d : image_data)
+            // {
+            //     printf("%02hhX ", d);
+            // }
+
+            // std::copy(std::istream_iterator<uint8_t>(inFile),
+            //     std::istream_iterator<uint8_t>(),
+            //     std::back_inserter(image_data));
+
+            //inFile.read(reinterpret_cast<char *>(image_data.data()), chunk.length);
+/*  
             Byte *uncompr = nullptr;
             Byte *compr = nullptr;
-/* */
+
             // unzip
             
             uLong comprLen = chunk.length;
@@ -277,13 +364,21 @@ int main()
             compr    = (Byte*) calloc((uInt)comprLen, 1);
             uncompr  = (Byte*) calloc((uInt)uncomprLen, 1);
 
+            // read the chunk's data
             inFile.read(reinterpret_cast<char *>(compr), comprLen);
 
-            int err = uncompress(uncompr, &uncomprLen, compr, comprLen);
+            // error = -4 => Z_MEM_ERROR
+            // error = -3 => Z_DATA_ERROR, ???
+            // error = -5 => Z_BUF_ERROR, not enough space in uncompr buffer
+            //int err = uncompress(uncompr, &uncomprLen, compr, comprLen);
+            //CHECK_ERR(err, "uncompress");
+
+            // https://stackoverflow.com/questions/30079658/uncompress-error-when-using-zlib
+            int err = inf((const char *)compr, comprLen, (const char *)uncompr, uncomprLen);
             CHECK_ERR(err, "uncompress");
 
             printf("UNCOMPRESSED\n");
-
+*/
 
 
             //test_compress(compr, comprLen, uncompr, uncomprLen);
@@ -404,9 +499,31 @@ int main()
 
 
 
+/*
             //
             // convert image data to bitmap
             //
+
+            uint32_t height = image_height;
+            uint32_t width = image_width;
+            //unsigned char image[height][width][BYTES_PER_PIXEL];
+
+            uint8_t* image = new uint8_t[height * width * BYTES_PER_PIXEL];
+            
+            char* imageFileName = (char*) "test_images\\bitmapImage.bmp";
+
+            // // dummy data
+            // int i, j;
+            // for (i = 0; i < height; i++) {
+            //     for (j = 0; j < width; j++) {
+            //         image[i][j][2] = (unsigned char) ( i * 255 / height );             ///red
+            //         image[i][j][1] = (unsigned char) ( j * 255 / width );              ///green
+            //         image[i][j][0] = (unsigned char) ( (i+j) * 255 / (height+width) ); ///blue
+            //     }
+            // }
+
+            // generateBitmapImage((unsigned char*) image, height, width, imageFileName);
+            // printf("Image generated!!");
 
             int idx = 1;
             int i, j;
@@ -453,11 +570,178 @@ int main()
                 free(uncompr);
                 uncompr = nullptr;
             }
-
+*/
 
             // pop file pointer
             inFile.seekg(current_file_position);
         }
+    }
+
+
+    // uint8_t new_line = 9;
+
+    // for (uint8_t d : image_data)
+    // {
+    //     printf("%02hhX ", d);
+    //     new_line++;
+
+    //     if (new_line == 16)
+    //     {
+    //         new_line = 0;
+    //         printf("\n");
+    //     }
+    // }
+
+
+
+    //
+    // uncompress
+    //
+
+    Byte *uncompr = nullptr;
+    Byte *compr = nullptr;
+
+    // unzip
+    
+    uLong comprLen = image_data.size();
+    uLong uncomprLen = 65536 * 1000;
+
+    //compr    = (Byte*) calloc((uInt)comprLen, 1);
+    uncompr  = (Byte*) calloc((uInt)uncomprLen, 1);
+
+    // read the chunk's data
+    //inFile.read(reinterpret_cast<char *>(compr), comprLen);
+
+    // error = -4 => Z_MEM_ERROR
+    // error = -3 => Z_DATA_ERROR, ???
+    // error = -5 => Z_BUF_ERROR, not enough space in uncompr buffer
+    //int err = uncompress(uncompr, &uncomprLen, compr, comprLen);
+    int err = uncompress(uncompr, &uncomprLen, (Byte *)image_data.data(), comprLen);
+    CHECK_ERR(err, "uncompress");
+
+
+/*
+    uint32_t new_line = 1 + image_width * 2 * 3;
+    uint32_t idx2 = 0;
+    for (uint32_t i = 0; i < uncomprLen; i++)
+    {
+        printf("%02hhX ", (uint8_t) uncompr[i]);
+
+        idx2++;
+        if (idx2 >= new_line)
+        {
+            printf("\n");
+            idx2 = 0;
+        }
+    }
+*/
+
+
+    // http://www.libpng.org/pub/png/spec/1.2/PNG-Filters.html
+
+    // 6.1. Filter types
+    // PNG filter method 0 defines five basic filter types:
+    //
+    // Type    Name
+    //
+    // 0       None
+    // 1       Sub
+    // 2       Up
+    // 3       Average
+    // 4       Paeth
+
+    // Filtering algorithms are applied to bytes, not to pixels, regardless of the bit depth or color type of the image. The filtering algorithms work on the byte sequence formed by a scanline that has been represented as described in Image layout. If the image includes an alpha channel, the alpha data is filtered in the same way as the image data.
+
+    // https://glitch.art/png
+
+
+/**/
+    //
+    // decode image data to bitmap - filter 0 (NONE) (no action is applied at all. See: https://glitch.art/png)
+    //
+
+    uint32_t height = image_height;
+    uint32_t width = image_width;
+
+    uint8_t* image = new uint8_t[height * width * BYTES_PER_PIXEL];
+
+    int idx = 1;
+    int i, j, k;
+    for (i = 0; i < height; i++) {
+        
+        for (j = 0; j < width; j++) {
+
+            // idx is just the current pixel in the png stream but in addition,
+            // the one byte filter instruction has to be added per line of the png image data!
+            // therefore the term (i+1) is added
+            idx = (i * width + j) * BYTES_PER_PIXEL + (i+1);
+            
+            // height is inverted because png images are stored top-down for some reason
+            for (k = BYTES_PER_PIXEL-1; k >= 0; k--)
+            {
+                image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + k ] = (unsigned char) (unsigned char) uncompr[idx + (BYTES_PER_PIXEL - (k+1))]; // red
+            }
+            idx = idx + BYTES_PER_PIXEL;
+        }
+    }
+
+
+
+/*
+    //
+    // decode image data to bitmap - filter 4 (paeth) (See: https://glitch.art/png)
+    //
+
+    uint32_t height = image_height;
+    uint32_t width = image_width;
+
+    uint8_t* image = new uint8_t[height * width * BYTES_PER_PIXEL];
+
+    int idx = 1;
+    int i, j;
+    for (i = 0; i < height; i++) {
+        
+        for (j = 0; j < width; j++) {
+
+            // idx is just the current pixel in the png stream but in addition,
+            // the one byte filter instruction has to be added per line of the png image data!
+            // therefore the term (i+1) is added
+            idx = (i * width + j) * BYTES_PER_PIXEL + (i+1);
+
+            uint8_t above_idx = idx - width * BYTES_PER_PIXEL
+            
+            // height is inverted because png images are stored top-down for some reason
+            image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 2 ] = (unsigned char) (unsigned char) uncompr[idx + 0]; // red
+            image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 1 ] = (unsigned char) (unsigned char) uncompr[idx + 1]; // green
+            image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 0 ] = (unsigned char) (unsigned char) uncompr[idx + 2]; // blue
+            
+            idx = idx + 3;
+        }
+    }
+*/
+
+
+
+
+    //
+    // convert image data to bitmap - filter 0 (NONE) (no action is applied at all. See: https://glitch.art/png)
+    //
+
+    char* imageFileName = (char*) "test_images\\bitmapImage.bmp";
+    generateBitmapImage((unsigned char*) image, height, width, imageFileName);
+    printf("Image generated!!\n");
+
+    if (image != nullptr) {
+        delete[] image;
+        image = nullptr;
+    }
+    if (compr != nullptr) {
+        free(compr);
+        compr = nullptr;
+    }
+    if (uncompr != nullptr) {
+        free(uncompr);
+        uncompr = nullptr;
     }
 
     return 0;
@@ -466,7 +750,101 @@ int main()
 
 
 
+/**
+ * From: https://dox.ipxe.org/png_8c_source.html
+ * 
+  * Paeth predictor function (defined in RFC 2083)
+  *
+  * @v a                 Pixel A
+  * @v b                 Pixel B
+  * @v c                 Pixel C
+  * @ret predictor       Predictor pixel
+  */
+ static unsigned int png_paeth_predictor ( unsigned int a, unsigned int b,
+                                           unsigned int c ) {
+         unsigned int p;
+         unsigned int pa;
+         unsigned int pb;
+         unsigned int pc;
+ 
+         /* Algorithm as defined in RFC 2083 section 6.6 */
+         p = ( a + b - c );
+         pa = abs ( p - a );
+         pb = abs ( p - b );
+         pc = abs ( p - c );
+         if ( ( pa <= pb ) && ( pa <= pc ) ) {
+                 return a;
+         } else if ( pb <= pc ) {
+                 return b;
+         } else {
+                 return c;
+         }
+ }
 
+ /**
+  * From: https://dox.ipxe.org/png_8c_source.html
+  * 
+  * Unfilter byte using the "Paeth" filter
+  *
+  * @v current           Filtered (raw) current byte
+  * @v above_left        Unfiltered above-left byte
+  * @v above             Unfiltered above byte
+  * @v left              Unfiltered left byte
+  * @ret current         Unfiltered current byte
+  */
+ static unsigned int png_unfilter_paeth ( unsigned int current,
+                                          unsigned int left,
+                                          unsigned int above,
+                                          unsigned int above_left ) {
+ 
+         return ( current + png_paeth_predictor ( left, above, above_left ) );
+ }
+
+ //https://dox.ipxe.org/png_8c_source.html
+
+
+
+// uint8_t PaethPredictor (uin8_t a, uin8_t b, uin8_t c)
+// {
+//         // // a = left, b = above, c = upper left
+//         // uint8_t p = a + b - c;        // initial estimate
+//         // pa = abs(p - a);      // distances to a, b, c
+//         // pb = abs(p - b);
+//         // pc = abs(p - c);
+
+//         // // return nearest of a,b,c,
+//         // // breaking ties in order a,b,c.
+//         // if (pa <= pb && pa <= pc) 
+//         // {
+//         //     return a;
+//         // }
+//         // else if (pb <= pc)
+//         // {
+//         //     return b;
+//         // }
+//         // else 
+//         // {
+//         //     return c;
+//         // }
+
+//         unsigned int p;
+//          unsigned int pa;
+//          unsigned int pb;
+//          unsigned int pc;
+ 
+//          /* Algorithm as defined in RFC 2083 section 6.6 */
+//          p = ( a + b - c );
+//          pa = abs ( p - a );
+//          pb = abs ( p - b );
+//          pc = abs ( p - c );
+//          if ( ( pa <= pb ) && ( pa <= pc ) ) {
+//                  return a;
+//          } else if ( pb <= pc ) {
+//                  return b;
+//          } else {
+//                  return c;
+//          }
+// }
 
 
 

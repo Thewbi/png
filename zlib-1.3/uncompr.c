@@ -48,7 +48,7 @@ int ZEXPORT uncompress2(Bytef *dest, uLongf *destLen, const Bytef *source,
     stream.zfree = (free_func)0;
     stream.opaque = (voidpf)0;
 
-    err = inflateInit(&stream);
+    err = inflateInit2(&stream);
     if (err != Z_OK) return err;
 
     stream.next_out = dest;
