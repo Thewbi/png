@@ -25,6 +25,9 @@ const int BYTES_PER_PIXEL = 3; // red, green, & blue (3 byte => 8 bit per color)
 const int FILE_HEADER_SIZE = 14;
 const int INFO_HEADER_SIZE = 40;
 
+// 1 to 256 entries, 8 bit per color (= 24 bit, RGB)
+unsigned char palette[256][3];
+
 void generateBitmapImage(unsigned char* image, int height, int width, char* imageFileName);
 unsigned char* createBitmapFileHeader(int height, int stride);
 unsigned char* createBitmapInfoHeader(int height, int width);
@@ -180,26 +183,55 @@ int main()
 
     // std::cout << "PNG" << std::endl;
 
+
+
+
+    // http://www.libpng.org/pub/png/spec/1.2/PNG-Filters.html
+
+    // 6.1. (Sub-) Filter types
+    // PNG filter method 0 defines five basic (sub-) filter types:
+    //
+    // Type    Name
+    //
+    // 0       None
+    // 1       Sub
+    // 2       Up
+    // 3       Average
+    // 4       Paeth
+
+    // Filtering algorithms are applied to bytes, not to pixels, regardless of the bit depth or color type of the image. The filtering algorithms work on the byte sequence formed by a scanline that has been represented as described in Image layout. If the image includes an alpha channel, the alpha data is filtered in the same way as the image data.
+
+
+
+
+
+
     // http://www.schaik.com/pngsuite/
 
     // colour-type: 0 grayscale
     //std::string inFileName{"test_images\\Grayscale_8bits_palette_sample_image.png"};
-    //std::string inFileName{"test_images\\plain_palette.png"}; // has two IDAT chunks !!!
+    std::string inFileName{"test_images\\plain_palette.png"}; // has two IDAT chunks !!! // 8 bit palette
     
-    // colour-type: 2 true color
+    // colour-type: 2 true color (aka. RGB)
     // has filter instructions!
-    //std::string inFileName{"test_images\\DphjT.png"};
+    //std::string inFileName{"test_images\\DphjT.png"}; // truecolor (RGB), 8 bit,  subfilter 1 (sub), 2 (up)
 
-    // true color
+    // colour-type: 2 true color (aka. RGB)
     // compression method: deflate
     // https://stackoverflow.com/questions/39019568/png-truecolor-8-bit-depth-how-to-read-idat-chunk
     //std::string inFileName{"test_images\\qOvp8.png"};
-    //std::string inFileName{"test_images\\Download_Several_IDAT_Chunks.png"};
-    //std::string inFileName{"test_images\\oi9n2c16.png"};
+    //std::string inFileName{"test_images\\Download_Several_IDAT_Chunks.png"}; // 8 bit, truecolor (RGB), subfilter 01 (sub), 02 (up), 03 (average), 04 (paeth)
+    //std::string inFileName{"test_images\\oi9n2c16.png"}; // 16 bit per color, 6 byte per pixel, filter: 4 (Paeth)
+    //std::string inFileName{"test_images\\lena-005-sub-transpose.png"}; // source: https://ucnv.github.io/pnglitch/
+    //std::string inFileName{"test_images\\lena-013-paeth-replace.png"}; // mixed subfilters 3 and 4
 
-    // colour-type: 2 true color (without alpha)
+    // colour-type: 2 true color (aka. RGB) (without alpha)
     // most simple case: true color, no filter instructions!
-    std::string inFileName{"test_images\\28736.png"};
+    //std::string inFileName{"test_images\\28736.png"};
+    //std::string inFileName{"test_images\\28736_2.png"}; // palette
+    //std::string inFileName{"test_images\\einstein.png"};
+    //std::string inFileName{"test_images\\bw_8bit_rgb_20x20.png"}; // sub-filter 1 and 2 (https://github.com/pngwriter/pngwriter/blob/master/pngs/bw_8bit_rgb_20x20.png)
+    //std::string inFileName{"test_images\\burro.png"}; // 8 bit per pixel, sub-filter 4 (paeth)
     //std::string inFileName{"test_images\\28894.png"};
     //std::string inFileName{"test_images\\triforce_chamber.png"};
     //std::string inFileName{"test_images\\small_2x3.png"};
@@ -235,6 +267,7 @@ int main()
 
     uint32_t image_width;
     uint32_t image_height;
+    uint8_t colour_type;
 
     std::vector<char> image_data;
 
@@ -272,7 +305,7 @@ int main()
             inFile.read(reinterpret_cast<char *>(&bit_depth), sizeof(uint8_t));
             std::cout << "bit_depth: " << unsigned(bit_depth) << std::endl;
 
-            uint8_t colour_type;
+            
             inFile.read(reinterpret_cast<char *>(&colour_type), sizeof(uint8_t));
             std::cout << "colour_type: " << unsigned(colour_type);
 
@@ -317,6 +350,38 @@ int main()
             inFile.read(reinterpret_cast<char *>(&interlace_method), sizeof(uint8_t));
             std::cout << "interlace_method: " << unsigned(interlace_method) << std::endl;
 
+            inFile.seekg(current_file_position);
+        }
+        else if (strncmp(reinterpret_cast<const char *>(chunk.type), "PLTE", 4) == 0)
+        {
+            // push file pointer
+            std::streampos current_file_position = inFile.tellg();
+
+            std::cout << "Palette Data" << std::endl;
+
+            // seek to chunk data
+            inFile.seekg(chunk.data_offset);
+
+            uint32_t entries = chunk.length / 3;
+
+
+            for (uint32_t i = 0; i < entries; i++)
+            {
+                uint8_t red = 0;
+                inFile.read(reinterpret_cast<char *>(&red), sizeof(uint8_t));
+                uint8_t green = 0;
+                inFile.read(reinterpret_cast<char *>(&green), sizeof(uint8_t));
+                uint8_t blue = 0;
+                inFile.read(reinterpret_cast<char *>(&blue), sizeof(uint8_t));
+
+                palette[i][0] = red;
+                palette[i][1] = green;
+                palette[i][2] = blue;
+            }
+
+
+
+            // pop file pointer
             inFile.seekg(current_file_position);
         }
         else if (strncmp(reinterpret_cast<const char *>(chunk.type), "IDAT", 4) == 0)
@@ -620,8 +685,36 @@ int main()
     CHECK_ERR(err, "uncompress");
 
 
+
+    //
+    // output uncompressed data (palette)
+    //
+
+    uint32_t new_line = 1 + image_width;
+    uint32_t idx2 = 0;
+    for (uint32_t i = 0; i < uncomprLen; i++)
+    {
+        if (idx2 == 0) {
+            printf("subfilter: %d\n", (uint8_t) uncompr[i]);
+        }
+        printf("%02hhX ", (uint8_t) uncompr[i]);
+
+        idx2++;
+        if (idx2 >= new_line)
+        {
+            printf("\n");
+            printf("\n");
+            idx2 = 0;
+        }
+    }
+
+
 /*
-    uint32_t new_line = 1 + image_width * 2 * 3;
+    //
+    // output uncompressed data (non-palette)
+    //
+
+    uint32_t new_line = 1 + image_width * BYTES_PER_PIXEL;
     uint32_t idx2 = 0;
     for (uint32_t i = 0; i < uncomprLen; i++)
     {
@@ -631,6 +724,7 @@ int main()
         if (idx2 >= new_line)
         {
             printf("\n");
+            printf("\n");
             idx2 = 0;
         }
     }
@@ -639,8 +733,8 @@ int main()
 
     // http://www.libpng.org/pub/png/spec/1.2/PNG-Filters.html
 
-    // 6.1. Filter types
-    // PNG filter method 0 defines five basic filter types:
+    // 6.1. (Sub-) Filter types
+    // PNG filter method 0 defines five basic (sub-) filter types:
     //
     // Type    Name
     //
@@ -655,21 +749,66 @@ int main()
     // https://glitch.art/png
 
 
-/**/
-    //
-    // decode image data to bitmap - filter 0 (NONE) (no action is applied at all. See: https://glitch.art/png)
-    //
-
     uint32_t height = image_height;
     uint32_t width = image_width;
 
     uint8_t* image = new uint8_t[height * width * BYTES_PER_PIXEL];
 
+
+    // palette
+    if (colour_type == 3) {
+
+        int idx = 1;
+        int i, j, k;
+        uint8_t subfilter = 0;
+        for (i = 0; i < height; i++) {
+            
+            for (j = 0; j < width; j++) {
+
+                if (j == 0) {
+                    subfilter = uncompr[(i * width * 1) + i];
+                    printf("subfilter: %d\n", subfilter);
+                }
+
+                // idx is just the current pixel in the png stream but in addition,
+                // the one byte filter instruction has to be added per line of the png image data!
+                // therefore the term (i+1) is added
+                idx = (i * width + j) * 1 + (i+1);
+
+                uint8_t index_into_palette = (unsigned char) uncompr[idx];
+                
+                // height is inverted because png images are stored top-down for some reason
+                image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 2 ] = (unsigned char) palette[index_into_palette][0]; // red
+                image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 1 ] = (unsigned char) palette[index_into_palette][1]; // green
+                image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 0 ] = (unsigned char) palette[index_into_palette][2]; // blue
+            
+
+                // next index
+                idx = idx + 1;
+            }
+        }
+
+    } else {
+
+
+/**/
+    //
+    // decode image data to bitmap - filter 0 (NONE) (no action is applied at all. See: https://glitch.art/png)
+    //
+
+    
+
     int idx = 1;
     int i, j, k;
+    uint8_t subfilter = 0;
     for (i = 0; i < height; i++) {
         
         for (j = 0; j < width; j++) {
+
+            if (j == 0) {
+                subfilter = uncompr[(i * width * BYTES_PER_PIXEL) + i];
+                //printf("subfilter: %d\n", subfilter);
+            }
 
             // idx is just the current pixel in the png stream but in addition,
             // the one byte filter instruction has to be added per line of the png image data!
@@ -679,7 +818,7 @@ int main()
             // height is inverted because png images are stored top-down for some reason
             for (k = BYTES_PER_PIXEL-1; k >= 0; k--)
             {
-                image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + k ] = (unsigned char) (unsigned char) uncompr[idx + (BYTES_PER_PIXEL - (k+1))]; // red
+                image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + k ] = (unsigned char) uncompr[idx + (BYTES_PER_PIXEL - (k+1))];
             }
             idx = idx + BYTES_PER_PIXEL;
         }
@@ -721,7 +860,7 @@ int main()
 */
 
 
-
+}
 
     //
     // convert image data to bitmap - filter 0 (NONE) (no action is applied at all. See: https://glitch.art/png)
