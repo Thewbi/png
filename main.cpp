@@ -850,34 +850,38 @@ int main()
                 
             } else if (subfilter == 3) {
 
-                if (i == 0) {
-                    uncompr[idx+0] = uncompr[idx+0] + 0;
-                } else {
+                //uint8_t a = 0;
+                //uint8_t b = 0;
 
-                    uint8_t a = uncompr[idx+0 - 3];
-                    uint8_t b = uncompr[idx+0 - width*BYTES_PER_PIXEL-1];
-                    uncompr[idx+0] = uncompr[idx+0] + ((a+b) / 2);
+                uint8_t sub_a = uncompr[idx+0 - 3];
+                uint8_t up_b = uncompr[idx+0 - width*BYTES_PER_PIXEL-1];
+                if (j == 0) {
+                    sub_a = 0;
                 }
-
                 if (i == 0) {
-                    uncompr[idx+1] = uncompr[idx+1] + 0;
-                } else {
-                    //uncompr[idx+1] = uncompr[idx+1] + uncompr[idx+1 - width*BYTES_PER_PIXEL-1];
-
-                    uint8_t a = uncompr[idx+1 - 3];
-                    uint8_t b = uncompr[idx+1 - width*BYTES_PER_PIXEL-1];
-                    uncompr[idx+1] = uncompr[idx+1] + ((a+b) / 2);
+                    up_b = 0;
                 }
+                uncompr[idx+0] = uncompr[idx+0] + ((sub_a+up_b) / 2);
+
+                sub_a = uncompr[idx+1 - 3];
+                up_b = uncompr[idx+1 - width*BYTES_PER_PIXEL-1];
+                if (j == 0) {
+                    sub_a = 0;
+                }
+                if (i == 0) {
+                    up_b = 0;
+                }
+                uncompr[idx+1] = uncompr[idx+1] + ((sub_a+up_b) / 2);
                 
-                if (i == 0) {
-                    uncompr[idx+2] = uncompr[idx+2] + 0;
-                } else {
-                    //uncompr[idx+2] = uncompr[idx+2] + uncompr[idx+2 - width*BYTES_PER_PIXEL-1];
-
-                    uint8_t a = uncompr[idx+2 - 3];
-                    uint8_t b = uncompr[idx+2 - width*BYTES_PER_PIXEL-1];
-                    uncompr[idx+2] = uncompr[idx+2] + ((a+b) / 2);
+                sub_a = uncompr[idx+2 - 3];
+                up_b = uncompr[idx+2 - width*BYTES_PER_PIXEL-1];
+                if (j == 0) {
+                    sub_a = 0;
                 }
+                if (i == 0) {
+                    up_b = 0;
+                }
+                uncompr[idx+2] = uncompr[idx+2] + ((sub_a+up_b) / 2);
                 
             }
             
