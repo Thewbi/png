@@ -97,3 +97,20 @@ so there is no need to use the zlib on it!
 The length of PLTE chunk has to be a multiple of 3. Each entry in the PLTE chunk 
 is 3 byte long. 1 byte per color of an RGB value. A RGB value has one byte for red, 
 one byte for green and one byte for blue in that order.
+
+
+## Implementing a decoder
+
+1. Open a png file and write a parser for chunks including CRC check
+2. Learn how to assemble all IDAT chunks into a single stream / buffer
+3. Learn how to inflate/uncompress the stream / buffer (from the IDAT chunks) using zlib
+4. Take the uncompressed data and remove the filter / subfilter from each row
+producing an buffer of raw data. Learn how to revert the sub, up, average, and thd paeth subfilter. 
+
+The raw data has the sub filter removed and also has the
+one leading byte removed that stores the sub-filter type.
+5. Depending on the colour type, the raw data is now palettized or true color data.
+True color data can be 8 or 16 bit per channel (channel = red or green or blue in RGB).
+6. Learn how to resolve palettized raw data into a windows BMP image.
+7. Learn how to resolve 8 bit and 16 true color into a windows BMP image.
+8. Write the windows bmp to disk.

@@ -108,14 +108,14 @@ void test_compress(Byte *compr, uLong comprLen, Byte *uncompr,
 // https://stackoverflow.com/questions/30079658/uncompress-error-when-using-zlib
 int inf(const char *src, int srcLen, const char *dst, int dstLen) {
     z_stream strm;
-    strm.zalloc=NULL;
-    strm.zfree=NULL;
-    strm.opaque=NULL;
+    strm.zalloc = NULL;
+    strm.zfree = NULL;
+    strm.opaque = NULL;
 
     strm.avail_in = srcLen;
     strm.avail_out = dstLen;
-    strm.next_in = (Bytef *)src;
-    strm.next_out = (Bytef *)dst;
+    strm.next_in = (Bytef *) src;
+    strm.next_out = (Bytef *) dst;
 
     int err=-1, ret=-1;
     err = inflateInit2(&strm, MAX_WBITS+16);
@@ -209,8 +209,7 @@ int main()
     // http://www.schaik.com/pngsuite/
 
     // colour-type: 0 grayscale
-    //std::string inFileName{"test_images\\Grayscale_8bits_palette_sample_image.png"};
-    std::string inFileName{"test_images\\plain_palette.png"}; // has two IDAT chunks !!! // 8 bit palette
+    //std::string inFileName{"test_images\\Grayscale_8bits_palette_sample_image.png"};    
     
     // colour-type: 2 true color (aka. RGB)
     // has filter instructions!
@@ -239,7 +238,9 @@ int main()
     //std::string inFileName{"test_images\\tiger-ny-png-safe-palette.png"};
 
     // colour-type: 3 indexed_color
+    //std::string inFileName{"test_images\\plain_palette.png"}; // has two IDAT chunks !!! // 8 bit palette
     //std::string inFileName{"test_images\\zelda_alttp_overworld.png"};
+    std::string inFileName{"test_images\\512x512.png"};
 
     // colour-type: 4 gray image with alpha channel
 
@@ -379,15 +380,11 @@ int main()
                 palette[i][2] = blue;
             }
 
-
-
             // pop file pointer
             inFile.seekg(current_file_position);
         }
         else if (strncmp(reinterpret_cast<const char *>(chunk.type), "IDAT", 4) == 0)
         {
-           
-
             // push file pointer
             std::streampos current_file_position = inFile.tellg();
 
@@ -399,9 +396,6 @@ int main()
 
 
 
-
-
-            
 
             //image_data.reserve(chunk.length);
 
@@ -685,9 +679,9 @@ int main()
     CHECK_ERR(err, "uncompress");
 
 
-
+/*
     //
-    // output uncompressed data (palette)
+    // output uncompressed data (colour type 3 - palette)
     //
 
     uint32_t new_line = 1 + image_width;
@@ -707,11 +701,11 @@ int main()
             idx2 = 0;
         }
     }
-
+*/
 
 /*
     //
-    // output uncompressed data (non-palette)
+    // output uncompressed data (colour type 2 - true color, non-palette)
     //
 
     uint32_t new_line = 1 + image_width * BYTES_PER_PIXEL;
@@ -754,7 +748,6 @@ int main()
 
     uint8_t* image = new uint8_t[height * width * BYTES_PER_PIXEL];
 
-
     // palette
     if (colour_type == 3) {
 
@@ -781,7 +774,6 @@ int main()
                 image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 2 ] = (unsigned char) palette[index_into_palette][0]; // red
                 image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 1 ] = (unsigned char) palette[index_into_palette][1]; // green
                 image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 0 ] = (unsigned char) palette[index_into_palette][2]; // blue
-            
 
                 // next index
                 idx = idx + 1;
@@ -807,13 +799,87 @@ int main()
 
             if (j == 0) {
                 subfilter = uncompr[(i * width * BYTES_PER_PIXEL) + i];
-                //printf("subfilter: %d\n", subfilter);
+                printf("subfilter: %d\n", subfilter);
             }
 
             // idx is just the current pixel in the png stream but in addition,
             // the one byte filter instruction has to be added per line of the png image data!
             // therefore the term (i+1) is added
             idx = (i * width + j) * BYTES_PER_PIXEL + (i+1);
+
+            // https://www.w3.org/TR/2003/REC-PNG-20031110/#9Filters
+            if (subfilter == 1) {
+
+                if (j == 0) {
+                    uncompr[idx+0] = uncompr[idx+0] + 0;
+                } else {
+                    uncompr[idx+0] = uncompr[idx+0] + uncompr[idx+0 - 3];
+                }
+
+                if (j == 0) {
+                    uncompr[idx+1] = uncompr[idx+1] + 0;
+                } else {
+                    uncompr[idx+1] = uncompr[idx+1] + uncompr[idx+1 - 3];
+                }
+                
+                if (j == 0) {
+                    uncompr[idx+2] = uncompr[idx+2] + 0;
+                } else {
+                    uncompr[idx+2] = uncompr[idx+2] + uncompr[idx+2 - 3];
+                }
+                
+            } else if (subfilter == 2) {
+
+                if (i == 0) {
+                    uncompr[idx+0] = uncompr[idx+0] + 0;
+                } else {
+                    uncompr[idx+0] = uncompr[idx+0] + uncompr[idx+0 - width*BYTES_PER_PIXEL-1];
+                }
+
+                if (i == 0) {
+                    uncompr[idx+1] = uncompr[idx+1] + 0;
+                } else {
+                    uncompr[idx+1] = uncompr[idx+1] + uncompr[idx+1 - width*BYTES_PER_PIXEL-1];
+                }
+                
+                if (i == 0) {
+                    uncompr[idx+2] = uncompr[idx+2] + 0;
+                } else {
+                    uncompr[idx+2] = uncompr[idx+2] + uncompr[idx+2 - width*BYTES_PER_PIXEL-1];
+                }
+                
+            } else if (subfilter == 3) {
+
+                if (i == 0) {
+                    uncompr[idx+0] = uncompr[idx+0] + 0;
+                } else {
+
+                    uint8_t a = uncompr[idx+0 - 3];
+                    uint8_t b = uncompr[idx+0 - width*BYTES_PER_PIXEL-1];
+                    uncompr[idx+0] = uncompr[idx+0] + ((a+b) / 2);
+                }
+
+                if (i == 0) {
+                    uncompr[idx+1] = uncompr[idx+1] + 0;
+                } else {
+                    //uncompr[idx+1] = uncompr[idx+1] + uncompr[idx+1 - width*BYTES_PER_PIXEL-1];
+
+                    uint8_t a = uncompr[idx+1 - 3];
+                    uint8_t b = uncompr[idx+1 - width*BYTES_PER_PIXEL-1];
+                    uncompr[idx+1] = uncompr[idx+1] + ((a+b) / 2);
+                }
+                
+                if (i == 0) {
+                    uncompr[idx+2] = uncompr[idx+2] + 0;
+                } else {
+                    //uncompr[idx+2] = uncompr[idx+2] + uncompr[idx+2 - width*BYTES_PER_PIXEL-1];
+
+                    uint8_t a = uncompr[idx+2 - 3];
+                    uint8_t b = uncompr[idx+2 - width*BYTES_PER_PIXEL-1];
+                    uncompr[idx+2] = uncompr[idx+2] + ((a+b) / 2);
+                }
+                
+            }
             
             // height is inverted because png images are stored top-down for some reason
             for (k = BYTES_PER_PIXEL-1; k >= 0; k--)
