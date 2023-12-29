@@ -799,7 +799,7 @@ int main()
 
             if (j == 0) {
                 subfilter = uncompr[(i * width * BYTES_PER_PIXEL) + i];
-                printf("subfilter: %d\n", subfilter);
+                //printf("subfilter: %d\n", subfilter);
             }
 
             // idx is just the current pixel in the png stream but in addition,
@@ -850,9 +850,6 @@ int main()
                 
             } else if (subfilter == 3) {
 
-                //uint8_t a = 0;
-                //uint8_t b = 0;
-
                 uint8_t sub_a = uncompr[idx+0 - 3];
                 uint8_t up_b = uncompr[idx+0 - width*BYTES_PER_PIXEL-1];
                 if (j == 0) {
@@ -886,15 +883,18 @@ int main()
             }
             
             // height is inverted because png images are stored top-down for some reason
-            for (k = BYTES_PER_PIXEL-1; k >= 0; k--)
+            //for (k = BYTES_PER_PIXEL-1; k >= 0; k--)
+            for (k = 0; k < BYTES_PER_PIXEL; k++)
             {
-                image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + k ] = (unsigned char) uncompr[idx + (BYTES_PER_PIXEL - (k+1))];
+                // normal
+                //image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + k ] = (unsigned char) uncompr[idx + (BYTES_PER_PIXEL - (k+1))];
+                
+                // top down
+                image[ i * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + k ] = (unsigned char) uncompr[idx + (BYTES_PER_PIXEL - (k+1))];
             }
             idx = idx + BYTES_PER_PIXEL;
         }
     }
-
-
 
 /*
     //
@@ -929,12 +929,152 @@ int main()
     }
 */
 
+    }
 
-}
+/**/
+    //
+    // tile search
+    //
 
+    uint32_t id = 0;
+
+    uint8_t tile[8 * 8 * BYTES_PER_PIXEL];
+    for (uint32_t k = 0; k < 8; k++) {
+        
+        for (uint32_t l = 0; l < 8; l++) {
+            tile[id] = 0;
+            id++;
+            tile[id] = 0;
+            id++;
+            tile[id] = 0;
+            id++;
+        }
+    }
+
+    id = 0;
+
+    for (uint32_t k = 0; k < 8; k++) {
+        
+        for (uint32_t l = 0; l < 8; l++) {
+
+            uint32_t idx = 0 + (k * width + l) * BYTES_PER_PIXEL;
+
+            printf("%d: R: %d, G: %d, B: %d, \n", idx, image[idx + 0], image[idx + 1], image[idx + 2]);
+
+            tile[id] = image[idx + 0];
+            id++;
+            tile[id] = image[idx + 1];
+            id++;
+            tile[id] = image[idx + 2];
+            id++;
+
+        }
+
+    }
+
+    // invert vertically since BMP is inverted vertically
+    for (uint32_t height_idx = 0; height_idx < (8 / 2); height_idx++)
+    {
+        for (uint32_t width_idx = 0; width_idx < 8; width_idx++)
+        {
+            uint32_t top_idx = (height_idx * 8 + width_idx) * BYTES_PER_PIXEL;
+            uint32_t bottom_idx = ((8 - height_idx - 1) * 8 + width_idx) * BYTES_PER_PIXEL;
+            uint8_t temp = 0;
+            
+            temp = tile[bottom_idx];
+            tile[bottom_idx] = tile[top_idx];
+            tile[top_idx] = temp;
+
+            temp = tile[bottom_idx + 1];
+            tile[bottom_idx + 1] = tile[top_idx + 1];
+            tile[top_idx + 1] = temp;
+
+            temp = tile[bottom_idx + 2];
+            tile[bottom_idx + 2] = tile[top_idx + 2];
+            tile[top_idx + 2] = temp;
+        }
+    }
+
+    char* imageFileNameTile = (char*) "test_images\\tile.bmp";
+    generateBitmapImage((unsigned char*) tile, 8, 8, imageFileNameTile);
+
+
+/*
+    std::vector<std::vector<uint8_t> *> tiles;
+
+    for (uint32_t i = 0; i < (height / 8); i++) {
+        
+        for (uint32_t j = 0; j < (width / 8); j++) {
+
+            uint32_t start = i * 8 * width + j * 8;
+            start *= 3;
+
+            uint32_t id = 0;
+
+            for (uint32_t k = 0; k < 8; k++) {
+        
+                for (uint32_t l = 0; l < 8; l++) {
+
+                    uint32_t idx = start + (k * width + l) * 3;
+
+                    printf("%d\n", idx);
+
+                    tile[id] = image[idx + 0];
+                    id++;
+                    tile[id] = image[idx + 1];
+                    id++;
+                    tile[id] = image[idx + 2];
+                    id++;
+
+                }
+
+                //break;
+
+            }
+
+            char* imageFileName = (char*) "test_images\\tile.bmp";
+            generateBitmapImage((unsigned char*) tile, 8, 8, imageFileName);
+
+            break;
+
+        }
+
+        break;
+
+    }
+*/
     //
     // convert image data to bitmap - filter 0 (NONE) (no action is applied at all. See: https://glitch.art/png)
     //
+
+    // height is inverted because png images are stored top-down for some reason
+    // for (k = BYTES_PER_PIXEL-1; k >= 0; k--)
+    // {
+    //     image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + k ] = (unsigned char) uncompr[idx + (BYTES_PER_PIXEL - (k+1))];
+    // }
+
+    // invert vertically since BMP is inverted vertically
+    for (uint32_t height_idx = 0; height_idx < (height / 2); height_idx++)
+    {
+        for (uint32_t width_idx = 0; width_idx < width; width_idx++)
+        {
+            uint32_t top_idx = (height_idx * width + width_idx) * BYTES_PER_PIXEL;
+            uint32_t bottom_idx = ((height - height_idx - 1) * width + width_idx) * BYTES_PER_PIXEL;
+            uint8_t temp = 0;
+            
+            temp = image[bottom_idx];
+            image[bottom_idx] = image[top_idx];
+            image[top_idx] = temp;
+
+            temp = image[bottom_idx + 1];
+            image[bottom_idx + 1] = image[top_idx + 1];
+            image[top_idx + 1] = temp;
+
+            temp = image[bottom_idx + 2];
+            image[bottom_idx + 2] = image[top_idx + 2];
+            image[top_idx + 2] = temp;
+        }
+    }
 
     char* imageFileName = (char*) "test_images\\bitmapImage.bmp";
     generateBitmapImage((unsigned char*) image, height, width, imageFileName);
@@ -1079,8 +1219,8 @@ int main ()
     printf("Image generated!!");
 }*/
 
-
-void generateBitmapImage (unsigned char* image, int height, int width, char* imageFileName)
+// https://devblogs.microsoft.com/oldnewthing/20210525-00/?p=105250
+void generateBitmapImage(unsigned char* image, int height, int width, char* imageFileName)
 {
     int widthInBytes = width * BYTES_PER_PIXEL;
 
@@ -1106,7 +1246,7 @@ void generateBitmapImage (unsigned char* image, int height, int width, char* ima
     fclose(imageFile);
 }
 
-unsigned char* createBitmapFileHeader (int height, int stride)
+unsigned char* createBitmapFileHeader(int height, int stride)
 {
     int fileSize = FILE_HEADER_SIZE + INFO_HEADER_SIZE + (stride * height);
 
