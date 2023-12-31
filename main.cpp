@@ -37,14 +37,14 @@ void generateBitmapImage(unsigned char* image, int height, int width, const char
 unsigned char* createBitmapFileHeader(int height, int stride);
 unsigned char* createBitmapInfoHeader(int height, int width);
 
+static unsigned int png_paeth_predictor (unsigned int a, unsigned int b, unsigned int c);
 
-static unsigned int png_paeth_predictor ( unsigned int a, unsigned int b,
-                                           unsigned int c );
-
-static unsigned int png_unfilter_paeth ( unsigned int current,
+static unsigned int png_unfilter_paeth (unsigned int current,
                                           unsigned int left,
                                           unsigned int above,
-                                          unsigned int above_left );
+                                          unsigned int above_left);
+
+void output_tile_to_bitmap(std::vector<uint8_t>* tile_vector);
 
 
 /**
@@ -245,8 +245,8 @@ int main()
     // colour-type: 3 indexed_color
     //std::string inFileName{"test_images\\plain_palette.png"}; // has two IDAT chunks !!! // 8 bit palette
     //std::string inFileName{"test_images\\zelda_alttp_overworld.png"};
-    //std::string inFileName{"test_images\\512x512.png"};
-    std::string inFileName{"test_images\\witch.png"};
+    std::string inFileName{"test_images\\woods_1.png"};
+    //std::string inFileName{"test_images\\witch.png"};
 
     // colour-type: 4 gray image with alpha channel
 
@@ -1183,35 +1183,50 @@ int main()
     // Combine all tiles into a large image
     //
 
-    int byte_size = tiles.size() * TILE_WIDTH * TILE_HEIGHT * BYTES_PER_PIXEL;
-    uint8_t* combined = new uint8_t[byte_size];
+    
 
     uint32_t tiles_per_line = 10;
     uint32_t combined_width = tiles_per_line * TILE_WIDTH;
-    float combined_height_as_float = (float) tiles.size() / 10.0f;
-    uint32_t combined_height = std::ceil(combined_height_as_float);
+    float number_of_lines_as_float = (float) tiles.size() / ((float) tiles_per_line);
+    uint32_t number_of_lines = std::ceil(number_of_lines_as_float);
 
-    uint32_t scan_lines = combined_height * TILE_HEIGHT;
+    uint32_t scan_lines = number_of_lines * TILE_HEIGHT;
 
     std::cout << "Total tiles: " << tiles.size() << std::endl;
     std::cout << "Tiles per line: " << tiles_per_line << std::endl;
-    std::cout << "Number of lines: " << combined_height << std::endl;
+    std::cout << "Number of lines: " << number_of_lines << std::endl;
+
+    //int byte_size = tiles.size() * TILE_WIDTH * TILE_HEIGHT * BYTES_PER_PIXEL;
+    int byte_size = number_of_lines * tiles_per_line * TILE_WIDTH * TILE_HEIGHT * BYTES_PER_PIXEL;
+    uint8_t* combined = new uint8_t[byte_size];
+    for (uint32_t l = 0; l < byte_size; l++)
+    {
+        combined[l] = 0;
+    }
 
     bool done = false;
+    //bool done = true;
 
     // over all scan lines
-    for (uint32_t line = 0; line < scan_lines; line++)
+    for (uint32_t scan_line = 0; scan_line < scan_lines; scan_line++)
     {
+        // // DEBUG only the first line of tiles
+        // if (scan_line == TILE_HEIGHT)
+        // {
+        //     done = true;
+        // }
+
         if (done) {
             break;
         }
 
         // overall line of tiles
-        uint32_t tile_line = line / TILE_HEIGHT;
+        uint32_t tile_line = scan_line / TILE_HEIGHT;
 
         // line inside tile
-        uint32_t tile_line_mod = line % TILE_HEIGHT;
+        uint32_t tile_line_mod = scan_line % TILE_HEIGHT;
 
+        // over all tiles in a line of the combined tile map
         for (uint32_t wwidth = 0; wwidth < tiles_per_line; wwidth++)
         {
             // compute tile index in 'tiles' vector
@@ -1223,18 +1238,20 @@ int main()
             //     printf("304\n");
             // }
 
-            // all existing tiles have been inserted into the combined tile map, abort
+            // only access tiles that actually exist in the list of tiles
             if (tile_idx < tiles.size())
             {
                 std::vector<uint8_t>* tile_ptr = tiles.at(tile_idx);
 
-                // copy 
+                //output_tile_to_bitmap(tile_ptr);
+
+                // copy the current tile
                 for (uint32_t ii = 0; ii < TILE_WIDTH; ii++)
                 {
                     uint32_t inner_idx = tile_line_mod * TILE_WIDTH + ii;
                     inner_idx *= 3;
 
-                    uint32_t outer_idx = line * tiles_per_line * TILE_WIDTH + wwidth * TILE_WIDTH + ii;
+                    uint32_t outer_idx = scan_line * tiles_per_line * TILE_WIDTH + wwidth * TILE_WIDTH + ii;
                     outer_idx *= 3;
 
                     combined[outer_idx + 0] = tile_ptr->at(inner_idx + 0);
@@ -1242,6 +1259,9 @@ int main()
                     combined[outer_idx + 2] = tile_ptr->at(inner_idx + 2);
                 }
             }
+
+            //done = true;
+            //break;
 
         }
     }
@@ -1288,9 +1308,33 @@ int main()
         delete temp_tile_vector;
     }
 
-
-
     return 0;
+}
+
+ // output tile to bmp
+void output_tile_to_bitmap(std::vector<uint8_t>* tile_vector)
+{
+    uint8_t tile[TILE_WIDTH * TILE_HEIGHT * BYTES_PER_PIXEL];
+
+    // invert vertically since BMP is inverted vertically
+    for (uint32_t height_idx = 0; height_idx < TILE_HEIGHT; height_idx++)
+    {
+        for (uint32_t width_idx = 0; width_idx < TILE_WIDTH; width_idx++)
+        {
+            // find top index and corresponding bottom index
+            uint32_t top_idx = (height_idx * TILE_WIDTH + width_idx) * BYTES_PER_PIXEL;
+            uint32_t bottom_idx = ((TILE_HEIGHT - height_idx - 1) * TILE_WIDTH + width_idx) * BYTES_PER_PIXEL;
+            
+            tile[bottom_idx + 0] = tile_vector->at(top_idx + 0);
+            tile[bottom_idx + 1] = tile_vector->at(top_idx + 1);
+            tile[bottom_idx + 2] = tile_vector->at(top_idx + 2);
+        }
+    }
+
+    std::ostringstream imageFileNameTile;
+    imageFileNameTile << "test_images\\tile_lul.bmp";
+
+    generateBitmapImage((unsigned char*) tile, TILE_HEIGHT, TILE_WIDTH, imageFileNameTile.str().c_str());
 }
 
 
