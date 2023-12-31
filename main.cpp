@@ -2,9 +2,11 @@
 #include <iomanip>
 #include <fstream>
 #include <string>
+#include <sstream>
 #include <cstring>
 #include <vector>
 #include <iterator>
+#include <cmath>
 
 #include "chunk.hpp"
 #include "zlib.h"
@@ -25,10 +27,13 @@ const int BYTES_PER_PIXEL = 3; // red, green, & blue (3 byte => 8 bit per color)
 const int FILE_HEADER_SIZE = 14;
 const int INFO_HEADER_SIZE = 40;
 
+constexpr uint8_t TILE_HEIGHT = 8;
+constexpr uint8_t TILE_WIDTH = 8;
+
 // 1 to 256 entries, 8 bit per color (= 24 bit, RGB)
 unsigned char palette[256][3];
 
-void generateBitmapImage(unsigned char* image, int height, int width, char* imageFileName);
+void generateBitmapImage(unsigned char* image, int height, int width, const char* imageFileName);
 unsigned char* createBitmapFileHeader(int height, int stride);
 unsigned char* createBitmapInfoHeader(int height, int width);
 
@@ -240,7 +245,8 @@ int main()
     // colour-type: 3 indexed_color
     //std::string inFileName{"test_images\\plain_palette.png"}; // has two IDAT chunks !!! // 8 bit palette
     //std::string inFileName{"test_images\\zelda_alttp_overworld.png"};
-    std::string inFileName{"test_images\\512x512.png"};
+    //std::string inFileName{"test_images\\512x512.png"};
+    std::string inFileName{"test_images\\witch.png"};
 
     // colour-type: 4 gray image with alpha channel
 
@@ -896,162 +902,11 @@ int main()
         }
     }
 
-/*
-    //
-    // decode image data to bitmap - filter 4 (paeth) (See: https://glitch.art/png)
-    //
-
-    uint32_t height = image_height;
-    uint32_t width = image_width;
-
-    uint8_t* image = new uint8_t[height * width * BYTES_PER_PIXEL];
-
-    int idx = 1;
-    int i, j;
-    for (i = 0; i < height; i++) {
-        
-        for (j = 0; j < width; j++) {
-
-            // idx is just the current pixel in the png stream but in addition,
-            // the one byte filter instruction has to be added per line of the png image data!
-            // therefore the term (i+1) is added
-            idx = (i * width + j) * BYTES_PER_PIXEL + (i+1);
-
-            uint8_t above_idx = idx - width * BYTES_PER_PIXEL
-            
-            // height is inverted because png images are stored top-down for some reason
-            image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 2 ] = (unsigned char) (unsigned char) uncompr[idx + 0]; // red
-            image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 1 ] = (unsigned char) (unsigned char) uncompr[idx + 1]; // green
-            image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 0 ] = (unsigned char) (unsigned char) uncompr[idx + 2]; // blue
-            
-            idx = idx + 3;
-        }
-    }
-*/
-
-    }
-
-/**/
-    //
-    // tile search
-    //
-
-    uint32_t id = 0;
-
-    uint8_t tile[8 * 8 * BYTES_PER_PIXEL];
-    for (uint32_t k = 0; k < 8; k++) {
-        
-        for (uint32_t l = 0; l < 8; l++) {
-            tile[id] = 0;
-            id++;
-            tile[id] = 0;
-            id++;
-            tile[id] = 0;
-            id++;
-        }
-    }
-
-    id = 0;
-
-    for (uint32_t k = 0; k < 8; k++) {
-        
-        for (uint32_t l = 0; l < 8; l++) {
-
-            uint32_t idx = 0 + (k * width + l) * BYTES_PER_PIXEL;
-
-            printf("%d: R: %d, G: %d, B: %d, \n", idx, image[idx + 0], image[idx + 1], image[idx + 2]);
-
-            tile[id] = image[idx + 0];
-            id++;
-            tile[id] = image[idx + 1];
-            id++;
-            tile[id] = image[idx + 2];
-            id++;
-
-        }
-
-    }
-
-    // invert vertically since BMP is inverted vertically
-    for (uint32_t height_idx = 0; height_idx < (8 / 2); height_idx++)
-    {
-        for (uint32_t width_idx = 0; width_idx < 8; width_idx++)
-        {
-            uint32_t top_idx = (height_idx * 8 + width_idx) * BYTES_PER_PIXEL;
-            uint32_t bottom_idx = ((8 - height_idx - 1) * 8 + width_idx) * BYTES_PER_PIXEL;
-            uint8_t temp = 0;
-            
-            temp = tile[bottom_idx];
-            tile[bottom_idx] = tile[top_idx];
-            tile[top_idx] = temp;
-
-            temp = tile[bottom_idx + 1];
-            tile[bottom_idx + 1] = tile[top_idx + 1];
-            tile[top_idx + 1] = temp;
-
-            temp = tile[bottom_idx + 2];
-            tile[bottom_idx + 2] = tile[top_idx + 2];
-            tile[top_idx + 2] = temp;
-        }
-    }
-
-    char* imageFileNameTile = (char*) "test_images\\tile.bmp";
-    generateBitmapImage((unsigned char*) tile, 8, 8, imageFileNameTile);
-
 
 /*
-    std::vector<std::vector<uint8_t> *> tiles;
-
-    for (uint32_t i = 0; i < (height / 8); i++) {
-        
-        for (uint32_t j = 0; j < (width / 8); j++) {
-
-            uint32_t start = i * 8 * width + j * 8;
-            start *= 3;
-
-            uint32_t id = 0;
-
-            for (uint32_t k = 0; k < 8; k++) {
-        
-                for (uint32_t l = 0; l < 8; l++) {
-
-                    uint32_t idx = start + (k * width + l) * 3;
-
-                    printf("%d\n", idx);
-
-                    tile[id] = image[idx + 0];
-                    id++;
-                    tile[id] = image[idx + 1];
-                    id++;
-                    tile[id] = image[idx + 2];
-                    id++;
-
-                }
-
-                //break;
-
-            }
-
-            char* imageFileName = (char*) "test_images\\tile.bmp";
-            generateBitmapImage((unsigned char*) tile, 8, 8, imageFileName);
-
-            break;
-
-        }
-
-        break;
-
-    }
-*/
     //
-    // convert image data to bitmap - filter 0 (NONE) (no action is applied at all. See: https://glitch.art/png)
+    // DEBUG: convert decoded png image data to bitmap
     //
-
-    // height is inverted because png images are stored top-down for some reason
-    // for (k = BYTES_PER_PIXEL-1; k >= 0; k--)
-    // {
-    //     image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + k ] = (unsigned char) uncompr[idx + (BYTES_PER_PIXEL - (k+1))];
-    // }
 
     // invert vertically since BMP is inverted vertically
     for (uint32_t height_idx = 0; height_idx < (height / 2); height_idx++)
@@ -1092,6 +947,348 @@ int main()
         free(uncompr);
         uncompr = nullptr;
     }
+*/
+
+
+
+/*
+    //
+    // decode image data to bitmap - filter 4 (paeth) (See: https://glitch.art/png)
+    //
+
+    uint32_t height = image_height;
+    uint32_t width = image_width;
+
+    uint8_t* image = new uint8_t[height * width * BYTES_PER_PIXEL];
+
+    int idx = 1;
+    int i, j;
+    for (i = 0; i < height; i++) {
+        
+        for (j = 0; j < width; j++) {
+
+            // idx is just the current pixel in the png stream but in addition,
+            // the one byte filter instruction has to be added per line of the png image data!
+            // therefore the term (i+1) is added
+            idx = (i * width + j) * BYTES_PER_PIXEL + (i+1);
+
+            uint8_t above_idx = idx - width * BYTES_PER_PIXEL
+            
+            // height is inverted because png images are stored top-down for some reason
+            image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 2 ] = (unsigned char) (unsigned char) uncompr[idx + 0]; // red
+            image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 1 ] = (unsigned char) (unsigned char) uncompr[idx + 1]; // green
+            image[ (height-1-i) * width * BYTES_PER_PIXEL + j * BYTES_PER_PIXEL + 0 ] = (unsigned char) (unsigned char) uncompr[idx + 2]; // blue
+            
+            idx = idx + 3;
+        }
+    }
+*/
+
+    }
+
+/**/
+    //
+    // tile search
+    //
+
+    // init all data to zero
+
+    uint32_t id = 0;
+
+    uint8_t tile[8 * 8 * BYTES_PER_PIXEL];
+    for (uint32_t k = 0; k < 8; k++) {
+        
+        for (uint32_t l = 0; l < 8; l++) {
+            tile[id] = 0;
+            id++;
+            tile[id] = 0;
+            id++;
+            tile[id] = 0;
+            id++;
+        }
+    }
+
+/*
+    //
+    // Test output of the first tile
+    //
+
+    id = 0;
+
+    for (uint32_t k = 0; k < 8; k++) {
+        
+        for (uint32_t l = 0; l < 8; l++) {
+
+            uint32_t idx = 0 + (k * width + l) * BYTES_PER_PIXEL;
+
+            printf("%d: R: %d, G: %d, B: %d, \n", idx, image[idx + 0], image[idx + 1], image[idx + 2]);
+
+            tile[id] = image[idx + 0];
+            id++;
+            tile[id] = image[idx + 1];
+            id++;
+            tile[id] = image[idx + 2];
+            id++;
+
+        }
+
+    }
+
+    // invert vertically since BMP is inverted vertically
+    for (uint32_t height_idx = 0; height_idx < (TILE_HEIGHT / 2); height_idx++)
+    {
+        for (uint32_t width_idx = 0; width_idx < TILE_WIDTH; width_idx++)
+        {
+            uint32_t top_idx = (height_idx * TILE_WIDTH + width_idx) * BYTES_PER_PIXEL;
+            uint32_t bottom_idx = ((TILE_HEIGHT - height_idx - 1) * TILE_WIDTH + width_idx) * BYTES_PER_PIXEL;
+            uint8_t temp = 0;
+            
+            temp = tile[bottom_idx];
+            tile[bottom_idx] = tile[top_idx];
+            tile[top_idx] = temp;
+
+            temp = tile[bottom_idx + 1];
+            tile[bottom_idx + 1] = tile[top_idx + 1];
+            tile[top_idx + 1] = temp;
+
+            temp = tile[bottom_idx + 2];
+            tile[bottom_idx + 2] = tile[top_idx + 2];
+            tile[top_idx + 2] = temp;
+        }
+    }
+
+    char* imageFileNameTile = (char*) "test_images\\tile.bmp";
+    generateBitmapImage((unsigned char*) tile, TILE_HEIGHT, TILE_WIDTH, imageFileNameTile);
+*/
+
+/**/
+    // working: search tiles and insert them into tile database
+
+    std::vector<std::vector<uint8_t> *> tiles;
+
+    for (uint32_t i = 0; i < (height / TILE_HEIGHT); i++) {
+        
+        for (uint32_t j = 0; j < (width / TILE_WIDTH); j++) {
+
+            uint32_t start = i * TILE_HEIGHT * width + j * TILE_WIDTH;
+            start *= BYTES_PER_PIXEL;
+
+            id = 0;
+
+            std::vector<uint8_t> * tile_vector = new std::vector<uint8_t>();
+
+            // copy one tile
+            for (uint32_t k = 0; k < TILE_HEIGHT; k++) {
+                
+                for (uint32_t l = 0; l < TILE_WIDTH; l++) {
+
+                    uint32_t idx = start + (k * width + l) * BYTES_PER_PIXEL;
+
+                    //printf("%d: R: %d, G: %d, B: %d, \n", idx, image[idx + 0], image[idx + 1], image[idx + 2]);
+
+                    tile[id] = image[idx + 0];
+                    tile_vector->push_back(image[idx + 0]);
+                    id++;
+
+                    tile[id] = image[idx + 1];
+                    tile_vector->push_back(image[idx + 1]);
+                    id++;
+
+                    tile[id] = image[idx + 2];
+                    tile_vector->push_back(image[idx + 2]);
+                    id++;
+                }
+            }
+
+            //
+            // search current tile in list of all tiles
+            //
+
+            bool found = false;
+            uint32_t tile_idx = 0;
+            for (std::vector<uint8_t> * temp_tile_vector : tiles)
+            {
+                found = true;
+                for (uint32_t tile_i = 0; tile_i < TILE_WIDTH * TILE_HEIGHT * BYTES_PER_PIXEL; tile_i++)
+                {
+                    if (temp_tile_vector->at(tile_i) != tile_vector->at(tile_i)) 
+                    {
+                        found = false;
+                        break;
+                    }
+                }
+
+                if (found) {
+                    //std::cout << "Tile (" << i << ", " << j << ") matches tile with index: " << tile_idx << std::endl;
+
+                    // +1 because tiled does not count from 0 but from 1
+                    std::cout << (tile_idx + 1) << ",";
+
+                    break;
+                }
+
+                tile_idx++;
+            }
+
+            if (!found) {
+                tiles.push_back(tile_vector);
+
+                //std::cout << "Tile (" << i << ", " << j << ") is new!" << std::endl;
+                //std::cout << (tiles.size() - 1) << ",";
+                std::cout << (tiles.size()) << ",";
+            }
+
+
+            // //
+            // // output tile to bmp
+            // //
+
+            // // invert vertically since BMP is inverted vertically
+            // for (uint32_t height_idx = 0; height_idx < (TILE_HEIGHT / 2); height_idx++)
+            // {
+            //     for (uint32_t width_idx = 0; width_idx < TILE_WIDTH; width_idx++)
+            //     {
+            //         // find top index and corresponding bottom index
+            //         uint32_t top_idx = (height_idx * TILE_WIDTH + width_idx) * BYTES_PER_PIXEL;
+            //         uint32_t bottom_idx = ((TILE_HEIGHT - height_idx - 1) * TILE_WIDTH + width_idx) * BYTES_PER_PIXEL;
+                    
+            //         // swap
+            //         uint8_t temp = tile[bottom_idx];
+            //         tile[bottom_idx] = tile[top_idx];
+            //         tile[top_idx] = temp;
+
+            //         temp = tile[bottom_idx + 1];
+            //         tile[bottom_idx + 1] = tile[top_idx + 1];
+            //         tile[top_idx + 1] = temp;
+
+            //         temp = tile[bottom_idx + 2];
+            //         tile[bottom_idx + 2] = tile[top_idx + 2];
+            //         tile[top_idx + 2] = temp;
+            //     }
+            // }
+
+            // std::ostringstream imageFileNameTile;
+            // imageFileNameTile << "test_images\\tile_" << i << "_" << j << ".bmp";
+
+            // generateBitmapImage((unsigned char*) tile, TILE_HEIGHT, TILE_WIDTH, imageFileNameTile.str().c_str());
+
+            // return 0;
+
+        }
+
+        std::cout << std::endl;
+    }
+
+    //
+    // Combine all tiles into a large image
+    //
+
+    int byte_size = tiles.size() * TILE_WIDTH * TILE_HEIGHT * BYTES_PER_PIXEL;
+    uint8_t* combined = new uint8_t[byte_size];
+
+    uint32_t tiles_per_line = 10;
+    uint32_t combined_width = tiles_per_line * TILE_WIDTH;
+    float combined_height_as_float = (float) tiles.size() / 10.0f;
+    uint32_t combined_height = std::ceil(combined_height_as_float);
+
+    uint32_t scan_lines = combined_height * TILE_HEIGHT;
+
+    std::cout << "Total tiles: " << tiles.size() << std::endl;
+    std::cout << "Tiles per line: " << tiles_per_line << std::endl;
+    std::cout << "Number of lines: " << combined_height << std::endl;
+
+    bool done = false;
+
+    // over all scan lines
+    for (uint32_t line = 0; line < scan_lines; line++)
+    {
+        if (done) {
+            break;
+        }
+
+        // overall line of tiles
+        uint32_t tile_line = line / TILE_HEIGHT;
+
+        // line inside tile
+        uint32_t tile_line_mod = line % TILE_HEIGHT;
+
+        for (uint32_t wwidth = 0; wwidth < tiles_per_line; wwidth++)
+        {
+            // compute tile index in 'tiles' vector
+            uint32_t tile_idx = tile_line * tiles_per_line + wwidth;
+
+            // if (tile_idx == 304)
+            // {
+            //     std::cout << "tile_line: " << tile_line << " tiles_per_line: " << tiles_per_line << " wwidth: " << wwidth << std::endl;
+            //     printf("304\n");
+            // }
+
+            // all existing tiles have been inserted into the combined tile map, abort
+            if (tile_idx < tiles.size())
+            {
+                std::vector<uint8_t>* tile_ptr = tiles.at(tile_idx);
+
+                // copy 
+                for (uint32_t ii = 0; ii < TILE_WIDTH; ii++)
+                {
+                    uint32_t inner_idx = tile_line_mod * TILE_WIDTH + ii;
+                    inner_idx *= 3;
+
+                    uint32_t outer_idx = line * tiles_per_line * TILE_WIDTH + wwidth * TILE_WIDTH + ii;
+                    outer_idx *= 3;
+
+                    combined[outer_idx + 0] = tile_ptr->at(inner_idx + 0);
+                    combined[outer_idx + 1] = tile_ptr->at(inner_idx + 1);
+                    combined[outer_idx + 2] = tile_ptr->at(inner_idx + 2);
+                }
+            }
+
+        }
+    }
+
+    //
+    // output all tiles to combined bmp
+    //
+
+    // invert vertically since BMP is inverted vertically
+    for (uint32_t height_idx = 0; height_idx < (scan_lines / 2); height_idx++)
+    {
+        for (uint32_t width_idx = 0; width_idx < combined_width; width_idx++)
+        {
+            // find top index and corresponding bottom index
+            uint32_t top_idx = (height_idx * combined_width + width_idx) * BYTES_PER_PIXEL;
+            uint32_t bottom_idx = ((scan_lines - height_idx - 1) * combined_width + width_idx) * BYTES_PER_PIXEL;
+            
+            // swap
+            uint8_t temp = combined[bottom_idx];
+            combined[bottom_idx] = combined[top_idx];
+            combined[top_idx] = temp;
+
+            temp = combined[bottom_idx + 1];
+            combined[bottom_idx + 1] = combined[top_idx + 1];
+            combined[top_idx + 1] = temp;
+
+            temp = combined[bottom_idx + 2];
+            combined[bottom_idx + 2] = combined[top_idx + 2];
+            combined[top_idx + 2] = temp;
+        }
+    }
+
+    std::ostringstream imageFileNameCombined;
+    imageFileNameCombined << "test_images\\combined.bmp";
+
+    generateBitmapImage((unsigned char*) combined, scan_lines, TILE_WIDTH * tiles_per_line, imageFileNameCombined.str().c_str());
+
+    //
+    // delete tile data
+    // 
+
+    for (std::vector<uint8_t> * temp_tile_vector : tiles)
+    {
+        delete temp_tile_vector;
+    }
+
+
 
     return 0;
 }
@@ -1220,7 +1417,7 @@ int main ()
 }*/
 
 // https://devblogs.microsoft.com/oldnewthing/20210525-00/?p=105250
-void generateBitmapImage(unsigned char* image, int height, int width, char* imageFileName)
+void generateBitmapImage(unsigned char* image, int height, int width, const char* imageFileName)
 {
     int widthInBytes = width * BYTES_PER_PIXEL;
 
